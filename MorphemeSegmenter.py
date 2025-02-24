@@ -40,24 +40,51 @@ class MorphemeSegmenter(nn.Module):
     @staticmethod
     def get_best_paths(scores: Tensor, word_lengths: Tensor, num_morphemes: Tensor):
         # This function is the same as in Girrbach's implementation.
+        # scores: shape [#words x #chars]
         num_words, num_chars = scores.shape
+
+        # Compute Character -> Morpheme Mask
         max_num_morphemes = torch.max(num_morphemes).cpu().item()
+
+        # Mask Separator Indices that Belong to Padding Chars
         index_mask = make_mask_2d(num_morphemes - 1)
-        index_mask_padding = torch.ones(index_mask.shape[0], 1, dtype=torch.bool, device=index_mask.device)
+        index_mask_padding = torch.ones(
+            index_mask.shape[0], 1, dtype=torch.bool, device=index_mask.device
+        )
         index_mask = torch.cat([index_mask, index_mask_padding], dim=1)
         index_mask = index_mask.to(scores.device)
+
+        # Select Number of Separators (with the Highest Scores) according to Number of Morphemes
+        # Because of Padding, Indices Start with 1 (We Remove 0 Later)
         best_separators = torch.topk(scores, dim=1, k=max_num_morphemes).indices
         best_separators = best_separators + 1
-        best_separator_indices = torch.masked_fill(best_separators, mask=index_mask, value=0)
-        best_separators_one_hot = torch.zeros(num_words, num_chars + 1, dtype=torch.long, device=scores.device)
-        best_separators_one_hot = torch.scatter(best_separators_one_hot, dim=1, index=best_separator_indices, value=1)
+        best_separator_indices = torch.masked_fill(
+            best_separators, mask=index_mask, value=0
+        )
+
+        # Convert Ordinal Indices to One-Hot Representations
+        # e.g. [1, 4] -> [0, 1, 0, 0, 1, 0, 0] corresponds to 3 morphemes
+        best_separators_one_hot = torch.zeros(
+            num_words, num_chars + 1, dtype=torch.long, device=scores.device
+        )
+        best_separators_one_hot = torch.scatter(
+            best_separators_one_hot, dim=1, index=best_separator_indices, value=1
+        )
+        # Remove Padding Indices
         best_separators_one_hot = best_separators_one_hot[:, 1:]
+        # New Morpheme Starts at Next Character
+        # -> Shift before cumsum
         best_separators_one_hot = torch.roll(best_separators_one_hot, shifts=1, dims=1)
         character_to_morpheme = best_separators_one_hot.cumsum(dim=1)
+
+        # Mask Padding Characters (Avoid Appending to Last Morpheme)
         best_path_mask = make_mask_3d(word_lengths, num_morphemes)
         best_path_matrix = one_hot(character_to_morpheme, num_classes=max_num_morphemes)
-        best_path_matrix = torch.masked_fill(best_path_matrix, mask=best_path_mask, value=0)
+        best_path_matrix = torch.masked_fill(
+            best_path_matrix, mask=best_path_mask, value=0
+        )
         best_path_matrix = best_path_matrix.bool()
+
         return best_path_matrix, best_separators_one_hot
 
     def get_marginals(self, scores: Tensor, word_lengths: Tensor, num_morphemes: Tensor):
@@ -214,49 +241,42 @@ class MorphemeSegmenter(nn.Module):
 
 # Testing the module
 if __name__ == "__main__":
-    # Define dummy parameters.
-    batch_size = 4  # For example, 4 words in a batch.
-    seq_len = 10  # Each word represented by 10 characters.
-    hidden_size = 256  # Dimensionality of the encoder outputs.
+    # Set parameters for the test
+    batch_size = 4  # Number of words in the batch
+    seq_len = 10  # Padded sequence length (number of characters per word)
+    hidden_size = 256  # Dimensionality of the encoder outputs
 
-    # Create dummy encoder outputs: shape (batch_size, seq_len, hidden_size).
-    # In practice, these would come from our Transformer encoder.
+    # Simulate encoder outputs: these mimic the output from our Transformer encoder
     dummy_encoder_outputs = torch.randn(batch_size, seq_len, hidden_size)
 
-    # Create dummy word lengths (each word may have a different valid length).
-    # Here, we assume the first word has 10 valid characters, second 8, third 9, fourth 7.
+    # Simulate word lengths (for example, each word may have fewer than 10 valid characters)
     word_lengths = torch.tensor([10, 8, 9, 7])
 
-    # For our experiments, we need to provide the number of morphemes per word.
-    # These could be gold or estimated values. For this dummy test, we assume:
+    # Simulate the expected number of morphemes per word (this might come from gold data or estimates)
     num_morphemes = torch.tensor([3, 2, 2, 2])
 
-    # Instantiate the ImprovedMorphemeSegmenter.
-    # We set use_gumbel=False to use standard adaptive thresholding in this example.
+    # Instantiate the improved morpheme segmenter
+    # Here, use_gumbel is set to False to use standard adaptive thresholding.
     segmenter = MorphemeSegmenter(hidden_size, use_gumbel=False, fixed_tau=None)
 
-    # ---- Training Mode (Soft Segmentation) ----
-    segmenter.train()
+    # ----- Run in Training Mode (Soft Segmentation) -----
+    segmenter.train()  # Set module to training mode
     soft_outputs = segmenter(dummy_encoder_outputs, word_lengths, num_morphemes, training=True)
-    # soft_outputs returns a tuple: (soft morpheme encodings, best_path_matrix based on marginals)
     morpheme_encodings_soft, best_path_matrix_soft = soft_outputs
 
-    # Print the outputs from training mode.
-    print("Training Mode (Soft Segmentation):")
+    print("==== Training Mode (Soft Segmentation) ====")
     print("Morpheme Encodings (soft):")
     print(morpheme_encodings_soft)
     print("\nBest Path Matrix (soft):")
     print(best_path_matrix_soft)
 
-    # ---- Inference Mode (Hard Segmentation) ----
-    segmenter.eval()
+    # ----- Run in Inference Mode (Hard Segmentation) -----
+    segmenter.eval()  # Set module to evaluation mode
     with torch.no_grad():
         hard_outputs = segmenter(dummy_encoder_outputs, word_lengths, num_morphemes, training=False)
-    # hard_outputs returns a tuple: (hard morpheme encodings, best_path_matrix computed via argmax)
     morpheme_encodings_hard, best_path_matrix_hard = hard_outputs
 
-    # Print the outputs from inference mode.
-    print("\nInference Mode (Hard Segmentation):")
+    print("\n==== Inference Mode (Hard Segmentation) ====")
     print("Morpheme Encodings (hard):")
     print(morpheme_encodings_hard)
     print("\nBest Path Matrix (hard):")
