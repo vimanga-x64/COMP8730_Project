@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 
 from torch import Tensor
-from Utilities import make_mask_2d
-from Utilities import make_mask_3d
+from COMP8730_Project.Utilities import make_mask_2d
+from COMP8730_Project.Utilities import make_mask_3d
 from torch.nn.functional import one_hot
 
 
