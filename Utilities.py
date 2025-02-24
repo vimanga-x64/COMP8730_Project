@@ -31,3 +31,10 @@ def make_mask_3d(word_lengths, num_morphemes):
     max_len = word_lengths.max().item()
     max_morphemes = num_morphemes.max().item()
     return torch.zeros(batch_size, max_len, max_morphemes, dtype=torch.bool, device=word_lengths.device)
+
+def max_pool_2d(x: torch.Tensor, lengths: torch.Tensor):
+    # x: shape [batch x timesteps x features]
+    mask = make_mask_2d(lengths).to(x.device).unsqueeze(-1)
+    x = torch.masked_fill(x, mask=mask, value=-1e9)
+    x = torch.max(x, dim=1).values
+    return x
