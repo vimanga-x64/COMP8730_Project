@@ -95,20 +95,44 @@ class TransformerCharEncoder(nn.Module):
 
 # Example usage:
 if __name__ == "__main__":
-    # Suppose our character vocabulary size is 100 (including special characters)
-    vocab_size = 100
+    # Set parameters
+    vocab_size = 100  # For example, 100 characters in vocabulary.
     batch_size = 32
-    seq_len = 50
-    d_model = 256
+    seq_len = 50  # Each sentence is 50 characters long.
+    d_model = 256  # Model dimensionality.
+    nhead = 8
+    num_layers = 6
+    dim_feedforward = 512
+    dropout = 0.1
+    max_len = 512
 
-    # Create the encoder instance
-    encoder = TransformerCharEncoder(vocab_size, d_model=d_model, nhead=8, num_layers=6,
-                                     dim_feedforward=512, dropout=0.1, max_len=512)
+    # Instantiate the Transformer-based encoder.
+    encoder = TransformerCharEncoder(
+        vocab_size=vocab_size,
+        d_model=d_model,
+        nhead=nhead,
+        num_layers=num_layers,
+        dim_feedforward=dim_feedforward,
+        dropout=dropout,
+        max_len=max_len
+    )
 
-    # Dummy input: random character indices with shape (batch_size, seq_len)
-    dummy_input = torch.randint(0, vocab_size, (batch_size, seq_len))
+    # Create a dummy input tensor (batch, seq_len) with random indices in the range [0, vocab_size).
+    dummy_input = torch.randint(low=0, high=vocab_size, size=(batch_size, seq_len), dtype=torch.long)
+    # For this example, assume that all sequences have full length.
+    sentence_lengths = torch.full((batch_size,), seq_len, dtype=torch.long)
 
-    # Obtain the contextualized representations
-    encoded_output = encoder(dummy_input)
-    print("Encoded output shape:", encoded_output.shape)
-    # Expected output shape: (batch_size, seq_len, d_model)
+    # Compute embeddings (or let the encoder do it internally).
+    # If your encoder expects raw indices, call it with dummy_input; if it expects embeddings,
+    # then first compute the embeddings.
+    # In our updated implementation, we want to pass embeddings and sentence_lengths.
+    # So we compute the embeddings using the encoder's own embedding layer.
+    embeddings = encoder.embedding(dummy_input) * math.sqrt(d_model)
+
+    # Now run the encoder.
+    encodings = encoder(embeddings, sentence_lengths)
+
+    # Print the output shape.
+    print("Input shape:", dummy_input.shape)
+    print("Encoded output shape:", encodings.shape)
+    # Expected shape: (batch_size, seq_len, d_model)
