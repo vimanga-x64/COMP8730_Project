@@ -135,4 +135,4 @@ if __name__ == "__main__":
     # Print the output shape.
     print("Input shape:", dummy_input.shape)
     print("Encoded output shape:", encodings.shape)
-    # Expected shape: (batch_size, seq_len, d_model)
+    print("Expected shape: ", (batch_size, seq_len, d_model))

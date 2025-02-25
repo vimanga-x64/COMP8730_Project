@@ -83,7 +83,7 @@ class MorphemeGlossingModel(LightningModule):
         # sentences: (batch, seq_len) with character indices.
         embeddings = self.embeddings(sentences)  # (batch, seq_len, hidden_size)
         # Pass through Transformer encoder.
-        encodings = self.encoder(sentences)
+        encodings = self.encoder(embeddings, sentence_lengths)
         return encodings
 
     def get_words(self, encodings: torch.Tensor, word_extraction_index: torch.Tensor) -> torch.Tensor:
@@ -149,6 +149,47 @@ class MorphemeGlossingModel(LightningModule):
             "morpheme_scores": morpheme_scores,    # Predictions for gloss labels.
             "best_path_matrix": best_path_matrix,   # Learned segmentation details.
         }
+
+    def training_step(self, batch, batch_idx):
+        scores = self.forward(batch=batch, training=True)
+
+        morpheme_classification_loss = self.cross_entropy(
+            scores["morpheme_scores"], batch.morpheme_targets
+        )
+        if self.classify_num_morphemes:
+            num_morpheme_loss = self.cross_entropy(
+                scores["num_morphemes_per_word_scores"], batch.word_target_lengths
+            )
+        else:
+            num_morpheme_loss = torch.tensor(
+                0.0, requires_grad=True, device=self.device
+            )
+
+        loss = (
+                morpheme_classification_loss
+                + num_morpheme_loss
+                - num_morpheme_loss.detach()
+        )
+        return loss
+
+    @staticmethod
+    def get_morpheme_to_word(num_morphemes_per_word: torch.Tensor):
+        num_morphemes_per_word_mask = make_mask_2d(num_morphemes_per_word)
+        num_morphemes_per_word_mask = torch.logical_not(num_morphemes_per_word_mask)
+        num_morphemes_per_word_mask_flat = num_morphemes_per_word_mask.flatten()
+
+        morpheme_to_word = torch.arange(
+            num_morphemes_per_word.shape[0], device=num_morphemes_per_word_mask.device
+        )
+        morpheme_to_word = morpheme_to_word.unsqueeze(1)
+        morpheme_to_word = morpheme_to_word.expand(num_morphemes_per_word_mask.shape)
+        morpheme_to_word = morpheme_to_word.flatten()
+        morpheme_to_word = torch.masked_select(
+            morpheme_to_word, mask=num_morphemes_per_word_mask_flat
+        )
+        morpheme_word_mapping = morpheme_to_word.cpu().tolist()
+        return morpheme_word_mapping
+
 
 # Example dummy Batch class for testing.
 class DummyBatch:
