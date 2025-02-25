@@ -3,95 +3,114 @@
 import torch
 import torch.nn as nn
 import math
-
-
+from typing import Optional
+#########################################
+# 1. Positional Encoding Module
+#########################################
 class PositionalEncoding(nn.Module):
     """
-    Implements sinusoidal positional encoding as described in
-    Vaswani et al. (2017). This injects sequence order information
-    into the embeddings since the Transformer is inherently permutation-invariant.
+    Implements sinusoidal positional encoding as in Vaswani et al. (2017).
     """
 
-    def __init__(self, d_model, dropout=0.1, max_len=5000):
+    def __init__(self, d_model: int, max_len: int = 5000):
         super(PositionalEncoding, self).__init__()
-        self.dropout = nn.Dropout(p=dropout)
-
-        # Create a long enough 'pe' matrix
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)  # Shape: (max_len, 1)
-        div_term = torch.exp(torch.arange(0, d_model, 2, dtype=torch.float) * (-math.log(10000.0) / d_model))
-        pe[:, 0::2] = torch.sin(position * div_term)  # sin for even indices
-        pe[:, 1::2] = torch.cos(position * div_term)  # cos for odd indices
-        pe = pe.unsqueeze(0)  # Shape: (1, max_len, d_model)
+        pe = torch.zeros(max_len, d_model)  # (max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)  # (max_len, 1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)  # even indices
+        pe[:, 1::2] = torch.cos(position * div_term)  # odd indices
+        pe = pe.unsqueeze(0)  # (1, max_len, d_model)
         self.register_buffer('pe', pe)
 
-    def forward(self, x):
-        """
-        x: Tensor of shape (batch_size, seq_len, d_model)
-        Returns: Tensor of the same shape with positional encodings added.
-        """
-        x = x + self.pe[:, :x.size(1)]
-        return self.dropout(x)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x shape: (batch_size, seq_len, d_model)
+        return x + self.pe[:, :x.size(1), :]
 
 
+#########################################
+# 2. Transformer Encoder Module
+#########################################
 class TransformerCharEncoder(nn.Module):
     """
-    A character-based Transformer encoder that maps a sequence of character embeddings
-    into contextualized representations.
+    Transformer-based character encoder that mirrors Girrbach's BiLSTMEncoder interface.
 
-    Parameters:
-    - vocab_size: Size of the character vocabulary (used for embedding lookup when needed).
-    - d_model: Dimensionality of embeddings and encoder hidden states.
-    - nhead: Number of heads in multi-head attention.
-    - num_layers: Number of Transformer encoder layers.
-    - dim_feedforward: Dimensionality of the feed-forward network.
-    - dropout: Dropout probability.
-    - max_len: Maximum sequence length supported.
-
-    Now, the forward method expects:
-       embeddings: Tensor of shape (batch, seq_len, d_model)
-           (precomputed via self.embedding(sentences))
-       sentence_lengths: Tensor of shape (batch,) indicating valid lengths.
+    Args:
+        input_size: Dimensionality of input features.
+        embed_dim: Embedding dimension (must be divisible by num_heads).
+        num_layers: Number of Transformer encoder layers.
+        num_heads: Number of attention heads.
+        dropout: Dropout probability.
+        projection_dim: Optional projection dimension for output (if None, returns embed_dim).
+        max_len: Maximum sequence length for positional encodings.
     """
 
-    def __init__(self, vocab_size, d_model=256, nhead=8, num_layers=6,
-                 dim_feedforward=512, dropout=0.1, max_len=512):
+    def __init__(
+            self,
+            input_size: int,
+            embed_dim: int,
+            num_layers: int = 1,
+            num_heads: int = 8,
+            dropout: float = 0.1,
+            projection_dim: Optional[int] = None,
+            max_len: int = 5000,
+    ):
         super(TransformerCharEncoder, self).__init__()
-        self.d_model = d_model
 
-        # Embedding layer (if needed)
-        self.embedding = nn.Embedding(vocab_size, d_model)
+        self.input_size = input_size
+        self.embed_dim = embed_dim
+        self.num_layers = num_layers
+        self.dropout = dropout
+        self.projection_dim = projection_dim
 
-        # Positional encoding module
-        self.pos_encoder = PositionalEncoding(d_model, dropout, max_len)
+        # Project input features if necessary.
+        if input_size != embed_dim:
+            self.input_projection = nn.Linear(input_size, embed_dim)
+        else:
+            self.input_projection = nn.Identity()
 
-        # Transformer encoder layer with batch_first=True
-        encoder_layer = nn.TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout, batch_first=True)
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers)
+        # Positional encoding
+        self.pos_encoder = PositionalEncoding(embed_dim, max_len=max_len)
 
-    def forward(self, embeddings, sentence_lengths, src_mask=None):
+        # Create Transformer encoder layers.
+        encoder_layer = nn.TransformerEncoderLayer(d_model=embed_dim, nhead=num_heads, dropout=dropout)
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+
+        # Optional projection to a different dimension.
+        if projection_dim is not None:
+            self.reduce_dim = nn.Linear(embed_dim, projection_dim)
+        else:
+            self.reduce_dim = nn.Identity()
+
+    def forward(self, inputs: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
         """
-        embeddings: Tensor of shape (batch, seq_len, d_model) (precomputed embeddings)
-        sentence_lengths: Tensor of shape (batch,) with valid lengths.
-        src_mask: Optional mask for attention.
-
+        Args:
+            inputs: Tensor of shape (batch_size, seq_len, input_size)
+            lengths: Tensor of shape (batch_size,) containing valid lengths.
         Returns:
-            output: Tensor of shape (batch, seq_len, d_model) with contextualized representations.
+            Tensor of shape (batch_size, seq_len, projection_dim) or (batch_size, seq_len, embed_dim)
         """
-        batch_size, seq_len, _ = embeddings.size()
-        device = embeddings.device
+        batch_size, seq_len, _ = inputs.size()
 
-        # Create a key padding mask: True for positions >= sentence_lengths (i.e., padding positions)
-        idx = torch.arange(seq_len, device=device).unsqueeze(0).expand(batch_size, -1)
-        src_key_padding_mask = idx >= sentence_lengths.unsqueeze(1)
+        # Project inputs.
+        x = self.input_projection(inputs)  # (batch_size, seq_len, embed_dim)
 
-        # Apply positional encoding to the embeddings.
-        x = self.pos_encoder(embeddings)
+        # Add positional encodings.
+        x = self.pos_encoder(x)  # (batch_size, seq_len, embed_dim)
 
-        # Pass through Transformer encoder. Note: batch_first=True means x remains (batch, seq_len, d_model)
-        encoded = self.transformer_encoder(x, mask=src_mask, src_key_padding_mask=src_key_padding_mask)
+        # Transformer expects (seq_len, batch_size, embed_dim)
+        x = x.transpose(0, 1)
+
+        # Create key padding mask: True for padded positions.
+        device = inputs.device
+        mask = torch.arange(seq_len, device=device).unsqueeze(0).expand(batch_size, seq_len) >= lengths.unsqueeze(1)
+
+        # Process using Transformer encoder.
+        encoded = self.transformer_encoder(x, src_key_padding_mask=mask)
+        encoded = encoded.transpose(0, 1)  # (batch_size, seq_len, embed_dim)
+
+        # Optionally reduce dimension.
+        encoded = self.reduce_dim(encoded)
         return encoded
-
 
 # Example usage:
 if __name__ == "__main__":
@@ -108,13 +127,6 @@ if __name__ == "__main__":
 
     # Instantiate the Transformer-based encoder.
     encoder = TransformerCharEncoder(
-        vocab_size=vocab_size,
-        d_model=d_model,
-        nhead=nhead,
-        num_layers=num_layers,
-        dim_feedforward=dim_feedforward,
-        dropout=dropout,
-        max_len=max_len
     )
 
     # Create a dummy input tensor (batch, seq_len) with random indices in the range [0, vocab_size).

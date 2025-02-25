@@ -1,243 +1,78 @@
-"""Decoder/Glossing Model"""
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import math
-from pytorch_lightning import LightningModule
-from torch.optim import AdamW
-from torch.optim.lr_scheduler import ExponentialLR
-
-
-from Encoder import TransformerCharEncoder
+from Encoder import TransformerCharEncoder, PositionalEncoding
 from MorphemeSegmenter import MorphemeSegmenter
-from Utilities import max_pool_2d, make_mask_2d
+from GlossingDecoder import GlossingDecoder
+from Utilities import aggregate_segments
 
-class MorphemeGlossingModel(LightningModule):
-    def __init__(
-        self,
-        source_alphabet_size: int,
-        target_alphabet_size: int,
-        hidden_size: int = 256,
-        num_encoder_layers: int = 6,
-        dropout: float = 0.1,
-        scheduler_gamma: float = 1.0,
-        learn_segmentation: bool = True,
-        classify_num_morphemes: bool = False,
-    ):
-        """
-        Our model encodes a source word (as a sequence of characters) using a Transformer-based encoder.
-        Then, if learn_segmentation is enabled (for Track 1), it learns to segment the word into morphemes
-        using our improved unsupervised morpheme segmenter. Finally, a linear classifier predicts gloss labels
-        from the morpheme representations.
-        """
-        super().__init__()
-        self.source_alphabet_size = source_alphabet_size
-        self.target_alphabet_size = target_alphabet_size
-        self.hidden_size = hidden_size
-        self.dropout = dropout
-        self.scheduler_gamma = scheduler_gamma
-        self.learn_segmentation = learn_segmentation
-        self.classify_num_morphemes = classify_num_morphemes
 
-        self.save_hyperparameters()
+#########################################
+# 6. Overall Glossing Pipeline Model
+#########################################
+class GlossingPipeline(nn.Module):
+    """
+    Full pipeline that integrates:
+      - Transformer-based character encoder,
+      - Improved morpheme segmentation with adaptive thresholding,
+      - A translation encoder to incorporate translation information,
+      - Glossing decoder with cross-attention over memory augmented with translation.
 
-        # Source character embeddings and Transformer encoder.
-        self.embeddings = nn.Embedding(
-            num_embeddings=self.source_alphabet_size,
-            embedding_dim=self.hidden_size,
-            padding_idx=0,
-        )
+    The segmentation learning can be toggled (learn_segmentation) for track 1 data.
+    """
+
+    def __init__(self, char_vocab_size: int, gloss_vocab_size: int, trans_vocab_size: int,
+                 embed_dim: int = 256, num_heads: int = 8, ff_dim: int = 512,
+                 num_layers: int = 6, dropout: float = 0.1, use_gumbel: bool = False):
+        super(GlossingPipeline, self).__init__()
+        # The encoder expects input features of dimension char_vocab_size.
+        # Here we assume one-hot representations, so input_size == char_vocab_size.
         self.encoder = TransformerCharEncoder(
-            vocab_size=self.source_alphabet_size,
-            d_model=self.hidden_size,
-            nhead=8,
-            num_layers=num_encoder_layers,
-            dim_feedforward=512,
-            dropout=self.dropout,
-            max_len=512,
+            input_size=char_vocab_size,
+            embed_dim=embed_dim,
+            num_layers=num_layers,
+            num_heads=num_heads,
+            dropout=dropout,
+            projection_dim=None
         )
+        self.segmentation = MorphemeSegmenter(embed_dim, use_gumbel=use_gumbel)
+        self.decoder = GlossingDecoder(
+            gloss_vocab_size=gloss_vocab_size,
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            ff_dim=ff_dim,
+            num_layers=num_layers,
+            dropout=dropout
+        )
+        # Translation encoder: simple embedding + mean pooling.
+        self.translation_encoder = nn.Embedding(trans_vocab_size, embed_dim)
 
-        # Gloss classifier: maps morpheme representations to gloss token probabilities.
-        self.classifier = nn.Linear(self.hidden_size, self.target_alphabet_size)
-        self.cross_entropy = nn.CrossEntropyLoss(ignore_index=0)
-
-        # Unsupervised segmentation (learned segmentation for Track 1)
-        if self.learn_segmentation:
-            self.segmenter = MorphemeSegmenter(self.hidden_size)
-
-        # Optionally, a classifier to predict number of morphemes.
-        if self.classify_num_morphemes:
-            self.num_morpheme_classifier = nn.Sequential(
-                nn.Dropout(p=self.dropout),
-                nn.Linear(self.hidden_size, self.hidden_size),
-                nn.GELU(),
-                nn.Linear(self.hidden_size, 10),
-            )
-
-    def configure_optimizers(self):
-        optimizer = AdamW(self.parameters(), lr=0.001, weight_decay=0.0)
-        scheduler = ExponentialLR(optimizer, gamma=self.scheduler_gamma)
-        return [optimizer], [scheduler]
-
-    def encode_sentences(self, sentences: torch.Tensor, sentence_lengths: torch.Tensor) -> torch.Tensor:
-        # sentences: (batch, seq_len) with character indices.
-        embeddings = self.embeddings(sentences)  # (batch, seq_len, hidden_size)
-        # Pass through Transformer encoder.
-        encodings = self.encoder(embeddings, sentence_lengths)
-        return encodings
-
-    def get_words(self, encodings: torch.Tensor, word_extraction_index: torch.Tensor) -> torch.Tensor:
-        # Extract word representations based on word_extraction_index.
-        # For simplicity, assume word_extraction_index maps indices from the flattened encoder output.
-        encodings = encodings.reshape(-1, self.hidden_size)
-        num_words, chars_per_word = word_extraction_index.shape
-        word_extraction_index_flat = word_extraction_index.flatten()
-        word_encodings = torch.index_select(encodings, dim=0, index=word_extraction_index_flat)
-        word_encodings = word_encodings.reshape(num_words, chars_per_word, self.hidden_size)
-        return word_encodings
-
-    def get_num_morphemes(self, word_encodings: torch.Tensor, word_lengths: torch.Tensor):
-        # Only used if classify_num_morphemes is True.
-        word_encodings = max_pool_2d(word_encodings, word_lengths)  # (batch, hidden_size)
-        num_morpheme_scores = self.num_morpheme_classifier(word_encodings)  # (batch, 10)
-        num_morpheme_predictions = torch.argmax(num_morpheme_scores, dim=-1)
-        num_morpheme_predictions = torch.minimum(num_morpheme_predictions, word_lengths)
-        num_morpheme_predictions = torch.clamp(num_morpheme_predictions, min=1)
-        return {"scores": num_morpheme_scores, "predictions": num_morpheme_predictions}
-
-    def forward(self, batch, training: bool = True):
+    def forward(self, src: torch.Tensor, src_lengths: torch.Tensor, tgt: torch.Tensor, trans: torch.Tensor,
+                learn_segmentation: bool = True):
         """
-        batch: an object with at least the following attributes:
-          - batch.sentences: Tensor of shape (batch, seq_len) for source characters.
-          - batch.sentence_lengths: Tensor of shape (batch,) with valid lengths.
-          - batch.word_extraction_index: Tensor mapping positions for word extraction.
-          - batch.word_lengths: Tensor with the number of valid characters per word.
-          - batch.word_target_lengths: Tensor with the expected number of morphemes per word.
+        Args:
+            src: Source word as sequence of character features (batch_size, src_seq_len, char_vocab_size)
+            src_lengths: Tensor (batch_size,) with valid lengths.
+            tgt: Target gloss token indices (batch_size, tgt_seq_len)
+            trans: Translation token indices (batch_size, trans_seq_len)
+            learn_segmentation: Whether to learn segmentation (True for track 1 data).
+        Returns:
+            logits: Tensor (batch_size, tgt_seq_len, gloss_vocab_size)
+            morpheme_count: Predicted morpheme counts (batch_size, 1)
+            tau: Adaptive threshold (batch_size, 1)
+            seg_probs: Raw segmentation probabilities (batch_size, src_seq_len)
         """
-        # Encode the sentences using our Transformer encoder.
-        char_encodings = self.encode_sentences(batch.sentences, batch.sentence_lengths)
-        # Extract word-level representations (for our purposes, assume each sentence is a word).
-        word_encodings = self.get_words(char_encodings, batch.word_extraction_index)
+        # Encode the source characters.
+        encoder_outputs = self.encoder(src, src_lengths)  # (batch_size, src_seq_len, embed_dim)
+        # Compute segmentation.
+        segmentation_mask, morpheme_count, tau, seg_probs = self.segmentation(encoder_outputs, learn_segmentation)
+        # Aggregate encoder outputs into segments.
+        seg_tensor = aggregate_segments(encoder_outputs, segmentation_mask)  # (batch_size, num_segments, embed_dim)
+        # Encode the translation and get a representation (mean pooling).
+        trans_embedded = self.translation_encoder(trans)  # (batch_size, trans_seq_len, embed_dim)
+        trans_repr = trans_embedded.mean(dim=1, keepdim=True)  # (batch_size, 1, embed_dim)
+        # Prepend translation representation to the segment memory.
+        memory = torch.cat([trans_repr, seg_tensor], dim=1)  # (batch_size, num_segments+1, embed_dim)
+        # Decode gloss tokens using cross-attention over the memory.
+        logits = self.decoder(tgt, memory)
+        return logits, morpheme_count, tau, seg_probs
 
-        if self.classify_num_morphemes:
-            num_morphemes_info = self.get_num_morphemes(word_encodings, batch.word_lengths)
-            if training:
-                num_morphemes = batch.word_target_lengths
-            else:
-                num_morphemes = num_morphemes_info["predictions"]
-        else:
-            num_morphemes = batch.word_target_lengths
-
-        if self.learn_segmentation:
-            # Learn segmentation from word_encodings (unsupervised segmentation for Track 1)
-            morpheme_encodings, best_path_matrix = self.segmenter(
-                word_encodings,
-                batch.word_lengths,
-                num_morphemes,
-                training=training
-            )
-        else:
-            # If segmentation is provided, extract morphemes accordingly.
-            # (For Track 2, for example; not implemented here.)
-            morpheme_encodings = word_encodings
-            best_path_matrix = None
-
-        # Gloss prediction: apply linear classifier to each morpheme representation.
-        morpheme_scores = self.classifier(morpheme_encodings)  # (batch, num_morphemes, target_vocab_size)
-
-        return {
-            "morpheme_scores": morpheme_scores,    # Predictions for gloss labels.
-            "best_path_matrix": best_path_matrix,   # Learned segmentation details.
-        }
-
-    def training_step(self, batch, batch_idx):
-        scores = self.forward(batch=batch, training=True)
-
-        morpheme_classification_loss = self.cross_entropy(
-            scores["morpheme_scores"], batch.morpheme_targets
-        )
-        if self.classify_num_morphemes:
-            num_morpheme_loss = self.cross_entropy(
-                scores["num_morphemes_per_word_scores"], batch.word_target_lengths
-            )
-        else:
-            num_morpheme_loss = torch.tensor(
-                0.0, requires_grad=True, device=self.device
-            )
-
-        loss = (
-                morpheme_classification_loss
-                + num_morpheme_loss
-                - num_morpheme_loss.detach()
-        )
-        return loss
-
-    @staticmethod
-    def get_morpheme_to_word(num_morphemes_per_word: torch.Tensor):
-        num_morphemes_per_word_mask = make_mask_2d(num_morphemes_per_word)
-        num_morphemes_per_word_mask = torch.logical_not(num_morphemes_per_word_mask)
-        num_morphemes_per_word_mask_flat = num_morphemes_per_word_mask.flatten()
-
-        morpheme_to_word = torch.arange(
-            num_morphemes_per_word.shape[0], device=num_morphemes_per_word_mask.device
-        )
-        morpheme_to_word = morpheme_to_word.unsqueeze(1)
-        morpheme_to_word = morpheme_to_word.expand(num_morphemes_per_word_mask.shape)
-        morpheme_to_word = morpheme_to_word.flatten()
-        morpheme_to_word = torch.masked_select(
-            morpheme_to_word, mask=num_morphemes_per_word_mask_flat
-        )
-        morpheme_word_mapping = morpheme_to_word.cpu().tolist()
-        return morpheme_word_mapping
-
-
-# Example dummy Batch class for testing.
-class DummyBatch:
-    def __init__(self, batch_size, src_seq_len, word_len, num_words):
-        self.sentences = torch.randint(1, 100, (batch_size, src_seq_len))
-        self.sentence_lengths = torch.full((batch_size,), src_seq_len, dtype=torch.long)
-        # For simplicity, assume each sentence is a word; word_extraction_index selects all positions.
-        self.word_extraction_index = torch.arange(src_seq_len).unsqueeze(0).expand(batch_size, src_seq_len)
-        self.word_lengths = torch.full((batch_size,), word_len, dtype=torch.long)
-        # Expected number of morphemes per word (gold segmentation for Track 1)
-        self.word_target_lengths = torch.randint(1, 4, (batch_size,))
-
-if __name__ == "__main__":
-    # Parameters for dummy data.
-    batch_size = 4
-    src_seq_len = 20
-    word_len = 20
-    num_words = batch_size
-    source_alphabet_size = 100
-    target_alphabet_size = 50
-    hidden_size = 256
-
-    # Create a dummy batch.
-    batch = DummyBatch(batch_size, src_seq_len, word_len, num_words)
-
-    # Instantiate our MorphemeGlossingModel.
-    model = MorphemeGlossingModel(
-        source_alphabet_size=source_alphabet_size,
-        target_alphabet_size=target_alphabet_size,
-        hidden_size=hidden_size,
-        num_encoder_layers=2,  # Use fewer layers for testing.
-        dropout=0.1,
-        scheduler_gamma=1.0,
-        learn_segmentation=True,
-        classify_num_morphemes=False  # For now, we don't need num_morpheme classification.
-    )
-
-    # Run a forward pass in training mode.
-    model.train()
-    outputs = model(batch, training=True)
-    print("Morpheme scores shape (training):", outputs["morpheme_scores"].shape)
-    if outputs["best_path_matrix"] is not None:
-        print("Best path matrix shape (training):", outputs["best_path_matrix"].shape)
-
-    # Run a forward pass in inference mode.
-    model.eval()
-    with torch.no_grad():
-        outputs = model(batch, training=False)
-    print("Morpheme scores shape (inference):", outputs["morpheme_scores"].shape)
-    if outputs["best_path_matrix"] is not None:
-        print("Best path matrix shape (inference):", outputs["best_path_matrix"].shape)
