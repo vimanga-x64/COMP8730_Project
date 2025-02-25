@@ -1,8 +1,0 @@
-classify_num_morphemes: false
-dropout: 0.1
-hidden_size: 256
-learn_segmentation: true
-num_encoder_layers: 2
-scheduler_gamma: 1.0
-source_alphabet_size: 71
-target_alphabet_size: 62
