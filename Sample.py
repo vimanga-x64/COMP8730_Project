@@ -9,8 +9,8 @@ from main import GlossingDataset
 #########################################
 def predict_gloss(model, dataset, source_text, translation_text, max_len=20):
     # Convert input text to tensors
-    src_tensor = dataset.text_to_tensor(source_text, dataset.src_vocab, char_level=True).unsqueeze(0)  # (1, seq_len)
-    trans_tensor = dataset.text_to_tensor(translation_text, dataset.trans_vocab, char_level=False).unsqueeze(
+    src_tensor = dataset.text_to_tensor(source_text, dataset.src_vocab,max_len, char_level=True).unsqueeze(0)  # (1, seq_len)
+    trans_tensor = dataset.text_to_tensor(translation_text, dataset.trans_vocab,max_len, char_level=False).unsqueeze(
         0)  # (1, seq_len)
 
     # Convert source tensor to one-hot encoding (required for encoder)
@@ -37,7 +37,10 @@ def predict_gloss(model, dataset, source_text, translation_text, max_len=20):
 
     # Convert generated indices to gloss text
     gloss_text = dataset.tensor_to_text(torch.tensor(generated_tokens), dataset.gloss_vocab)
-    return gloss_text
+    return gloss_text[:20]
+
+
+torch.manual_seed(42)
 
 dataset = GlossingDataset("data/Dummy_Dataset.csv")
 

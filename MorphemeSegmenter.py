@@ -61,3 +61,46 @@ class MorphemeSegmenter(nn.Module):
             segmentation_mask = seg_probs
 
         return segmentation_mask, morpheme_count, tau, seg_probs
+
+
+if __name__ == "__main__":
+    # Set random seed for reproducibility
+    torch.manual_seed(42)
+
+    # Sample parameters
+    batch_size = 4  # Number of words in the batch
+    seq_len = 10  # Number of characters per word (padded length)
+    embed_dim = 128  # Dimensionality of encoder outputs
+
+    # Create dummy encoder outputs (simulate character-level encoder output)
+    dummy_encoder_outputs = torch.randn(batch_size, seq_len, embed_dim)
+
+    # Instantiate the morpheme segmenter with Gumbel noise enabled
+    segmenter = MorphemeSegmenter(embed_dim, use_gumbel=True, temperature=1.0)
+
+    print("=== Running in Training Mode (learn_segmentation=True) ===")
+    segmenter.train()  # Training mode: uses hard decisions with straight-through gradient estimation
+    seg_mask_train, morpheme_count_train, tau_train, seg_probs_train = segmenter(dummy_encoder_outputs,
+                                                                                 learn_segmentation=True)
+    print("Segmentation Mask (Training Mode):")
+    print(seg_mask_train)
+    print("Predicted Morpheme Count:")
+    print(morpheme_count_train)
+    print("Adaptive Threshold (tau):")
+    print(tau_train)
+    print("Raw Segmentation Probabilities:")
+    print(seg_probs_train)
+
+    print("\n=== Running in Inference Mode (learn_segmentation=False) ===")
+    segmenter.eval()  # Inference mode: returns soft segmentation probabilities
+    with torch.no_grad():
+        seg_mask_infer, morpheme_count_infer, tau_infer, seg_probs_infer = segmenter(dummy_encoder_outputs,
+                                                                                     learn_segmentation=False)
+    print("Segmentation Mask (Inference Mode):")
+    print(seg_mask_infer)
+    print("Predicted Morpheme Count:")
+    print(morpheme_count_infer)
+    print("Adaptive Threshold (tau):")
+    print(tau_infer)
+    print("Raw Segmentation Probabilities:")
+    print(seg_probs_infer)

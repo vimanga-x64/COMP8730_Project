@@ -72,7 +72,7 @@ class TransformerCharEncoder(nn.Module):
         self.pos_encoder = PositionalEncoding(embed_dim, max_len=max_len)
 
         # Create Transformer encoder layers.
-        encoder_layer = nn.TransformerEncoderLayer(d_model=embed_dim, nhead=num_heads, dropout=dropout)
+        encoder_layer = nn.TransformerEncoderLayer(d_model=embed_dim, nhead=num_heads, dropout=dropout, batch_first=True)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
 
         # Optional projection to a different dimension.
@@ -98,7 +98,7 @@ class TransformerCharEncoder(nn.Module):
         x = self.pos_encoder(x)  # (batch_size, seq_len, embed_dim)
 
         # Transformer expects (seq_len, batch_size, embed_dim)
-        x = x.transpose(0, 1)
+        # x = x.transpose(0, 1)
 
         # Create key padding mask: True for padded positions.
         device = inputs.device
@@ -106,45 +106,53 @@ class TransformerCharEncoder(nn.Module):
 
         # Process using Transformer encoder.
         encoded = self.transformer_encoder(x, src_key_padding_mask=mask)
-        encoded = encoded.transpose(0, 1)  # (batch_size, seq_len, embed_dim)
+        # encoded = encoded.transpose(0, 1)  # (batch_size, seq_len, embed_dim)
 
         # Optionally reduce dimension.
         encoded = self.reduce_dim(encoded)
         return encoded
 
-# Example usage:
-if __name__ == "__main__":
-    # Set parameters
-    vocab_size = 100  # For example, 100 characters in vocabulary.
-    batch_size = 32
-    seq_len = 50  # Each sentence is 50 characters long.
-    d_model = 256  # Model dimensionality.
-    nhead = 8
-    num_layers = 6
-    dim_feedforward = 512
-    dropout = 0.1
-    max_len = 512
 
-    # Instantiate the Transformer-based encoder.
+#########################################
+# 3. Sample Script to Test the Encoder
+#########################################
+def main():
+    # Parameters
+    batch_size = 2
+    seq_len = 10
+    input_size = 16  # Dimensionality of input character embeddings
+    embed_dim = 32  # Transformer internal embedding size
+    num_layers = 2
+    num_heads = 4
+    dropout = 0.1
+    projection_dim = 16  # Optional output projection
+    max_len = 100
+
+    # Create a sample input tensor with random values.
+    # This could represent, for example, character embeddings for a batch of sequences.
+    sample_input = torch.randn(batch_size, seq_len, input_size)
+
+    # Define sequence lengths (e.g., first sequence has length 10, second sequence length 8).
+    lengths = torch.tensor([10, 8])
+
+    # Instantiate the TransformerCharEncoder.
     encoder = TransformerCharEncoder(
+        input_size=input_size,
+        embed_dim=embed_dim,
+        num_layers=num_layers,
+        num_heads=num_heads,
+        dropout=dropout,
+        projection_dim=projection_dim,
+        max_len=max_len
     )
 
-    # Create a dummy input tensor (batch, seq_len) with random indices in the range [0, vocab_size).
-    dummy_input = torch.randint(low=0, high=vocab_size, size=(batch_size, seq_len), dtype=torch.long)
-    # For this example, assume that all sequences have full length.
-    sentence_lengths = torch.full((batch_size,), seq_len, dtype=torch.long)
+    # Pass the sample input through the encoder.
+    output = encoder(sample_input, lengths)
 
-    # Compute embeddings (or let the encoder do it internally).
-    # If your encoder expects raw indices, call it with dummy_input; if it expects embeddings,
-    # then first compute the embeddings.
-    # In our updated implementation, we want to pass embeddings and sentence_lengths.
-    # So we compute the embeddings using the encoder's own embedding layer.
-    embeddings = encoder.embedding(dummy_input) * math.sqrt(d_model)
+    # Print output details.
+    print("Output shape:", output.shape)
+    print("Output tensor:", output)
 
-    # Now run the encoder.
-    encodings = encoder(embeddings, sentence_lengths)
 
-    # Print the output shape.
-    print("Input shape:", dummy_input.shape)
-    print("Encoded output shape:", encodings.shape)
-    # Expected shape: (batch_size, seq_len, d_model)
+if __name__ == '__main__':
+    main()
