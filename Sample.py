@@ -48,3 +48,4 @@ trained_model = GlossingPipeline.load_from_checkpoint("glossing_model.ckpt")
 # Test Run
 print("The predicted gloss for language 'inopi-a' with translation 'a wine shortage' is:")
 print(predict_gloss(trained_model, dataset, "inopi-a", "a wine shortage"))
+print("Expected output: shortage-FEM.NOM.SG ")
