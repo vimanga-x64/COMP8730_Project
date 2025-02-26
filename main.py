@@ -1,7 +1,7 @@
 """Training Script"""
 
+
 import torch
-import torch.nn.functional as F
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 from GlossingModel import GlossingPipeline
@@ -9,7 +9,7 @@ import pytorch_lightning as pl
 
 
 #########################################
-# 1. Custom Dataset for CSV Data i.e Dummy_Dataset.csv
+# 1. Custom Dataset for CSV Data i.e. Dummy_Dataset.csv
 #########################################
 class GlossingDataset(Dataset):
     """
@@ -88,8 +88,7 @@ if __name__ == '__main__':
     dataset = GlossingDataset("data/Dummy_Dataset.csv", src_vocab, gloss_vocab, trans_vocab,
                               max_src_len=50, max_tgt_len=20, max_trans_len=10)
     dataloader = DataLoader(dataset, batch_size=4, shuffle=True, collate_fn=collate_fn,
-                            num_workers=6,
-                            persistent_workers=True)
+                              num_workers=6, persistent_workers=True)
 
     # Hyperparameters.
     char_vocab_size = len(src_vocab)
@@ -106,12 +105,13 @@ if __name__ == '__main__':
 
     # Initialize the integrated LightningModule.
     model = GlossingPipeline(char_vocab_size, gloss_vocab_size, trans_vocab_size,
-                                      embed_dim, num_heads, ff_dim, num_layers, dropout, use_gumbel,
-                                      learning_rate, gloss_pad_idx)
+                             embed_dim, num_heads, ff_dim, num_layers, dropout, use_gumbel,
+                             learning_rate, gloss_pad_idx)
 
     # Initialize PyTorch Lightning trainer.
-    trainer = pl.Trainer(max_epochs=5,
+    trainer = pl.Trainer(max_epochs=3,
                          accelerator="auto",
                          log_every_n_steps=10,
-                         enable_progress_bar=True,)
+                         enable_progress_bar=True)
     trainer.fit(model, dataloader)
+
