@@ -1,52 +1,51 @@
 ﻿Language,Gloss,Translation
-Arm-aArm-a vir-um-que can-o vir-um-que can-o,weapon neuter.acc.pl.man masc.acc.sg.and sing 1st person,I sing about weapons and a man.
-catullus clo...diam ama...bat,Catullus.NOM Clodia.ACC loved,Catullus loved Clodia
-catullum clo...dia no...n ama...bat,Catullus.ACC Clodia.NOM not loved,Clodia didn't love Catullus
-catullus libellum corne...li... dedit,Catullus.NOM book.ACC Cornelius.DAT gave,Catullus gave the book to Cornelius
-ami...cus clo...diae corne...lium wi...sit.,friend.NOM Clodia.GEN Cornelius.ACC saw,Clodia's friend saw Cornelius
-catullus clo...diam ama...bat,Catullus.NOM Clodia.ACC loved,Catullus loved Clodia
-catullum clo...dia no...n ama...bat,Catullus.ACC Clodia.NOM not loved,Clodia didn't love Catullus
-[carn-i]vorus,[flesh-SUF] eating,carnivore
-Archia#s Antiochi#ae na#tus est celebri# quondam urbe.,ArchiasN AntiochL(=G) having.been.born is populousB once cityB,"Archias was born at Antioch, once a populous city."
-"Nea#poli#, in celeberrimo# oppido#",NaplesL in very.populousB townB,"At Naples, a populous town"
-Domi# suae senex est mortuus.,HouseL hisG old.manN is having.died,The old man died at his own house.
-"Rhodi# ego no#n fui#, sed fui# in Bithy#nia#.","RhodesL meN not I.was, but I.was in BithyniaB","I was not at Rhodes, but I was in Bithynia."
-"Aristide patria pulso, Persae Graecos aggressi sunt. ",Aristides:ABL country:ABL expelled:ABL Persians Greeks attacked AUX,"Aristides having been exiled, the Persians attacked the Greeks."
+Arma Arma virumque cano virumque cano,weapon neuter.acc.pl.man masc.acc.sg.and sing 1st person,I sing about weapons and a man.
+catullus clodiam amabat,Catullus.NOM Clodia.ACC loved,Catullus loved Clodia
+catullum clodia non amabat,Catullus.ACC Clodia.NOM not loved,Clodia didn't love Catullus
+catullus libellum corneli dedit,Catullus.NOM book.ACC Cornelius.DAT gave,Catullus gave the book to Cornelius
+amicus clodiae cornelium wisit.,friend.NOM Clodia.GEN Cornelius.ACC saw,Clodia's friend saw Cornelius
+catullus clodiam amabat,Catullus.NOM Clodia.ACC loved,Catullus loved Clodia
+catullum clodia non amabat,Catullus.ACC Clodia.NOM not loved,Clodia didn't love Catullus
+carnivorus,[flesh-SUF] eating,carnivore
+Archias Antiochiae natus est celebri quondam urbe.,ArchiasN AntiochL(=G) having.been.born is populousB once cityB,"Archias was born at Antioch, once a populous city."
+"Neapoli, in celeberrimo oppido",NaplesL in very.populousB townB,"At Naples, a populous town"
+Domi suae senex est mortuus.,HouseL hisG old.manN is having.died,The old man died at his own house.
+"Rhodi ego non fui, sed fui in Bithynia.","RhodesL meN not I.was, but I.was in BithyniaB","I was not at Rhodes, but I was in Bithynia."
+"Aristide patria pulso, Persae Graecos aggressi sunt",Aristides:ABL country:ABL expelled:ABL Persians Greeks attacked AUX,"Aristides having been exiled, the Persians attacked the Greeks."
 Aristidem patria pulsum viderunt.,Aristides:ACC country:ABL expelled:ACC saw:3pl,"They saw Aristides, who had been exiled."
-ascia nova,axe.NOM new.NOM,a/the new axe
+ascia nova,axe.NOM new.NOM,the new axe
 Puer hominem vidit,boy-[nom] man-[acc] saw,The boy saw the man.
 fama urbem per-vasit,fama urbem per-vasit,The rumor went around the town.
 mihi eundum est.,me go:GER is,I have to go.
-puell-a dic-et.,puell-a dic-et.,the girl is speaking
-[bon-a terr-a] est, [good-FEM.NOM.SG land-FEM.NOM.SG] be.PRES.3SG,it is good land
-inopi-a,shortage-FEM.NOM.SG wine-NEUT.GEN.SG,a wine shortage
-[puer-os · voca-nt-em] vide-o,boy-ACC.PL call-PRES.PTCPL-ACC.SG see.PRES-1SG,I see the one that is calling the boys
-long-um vide-o·,tall-ACC.SG.MASC see.PRES-1SG,I see the tall one (masculine)
-ipse in Italiam magnis itineribus contendit duas=que ibi legiones conscribit,self in Italy great marches speeds two and there legions enrolls,and he speeds to Italy with great marches and enrolls two legions there
-arcebat longe Latio multos=que per annos errabant,defended far Latium many and for years wandered,"kept them far from Latium, and for many years they wandered"
-,,
+puella dicet.,puell-a dic-et.,the girl is speaking
+bona terra est,[good-FEM.NOM.SG land-FEM.NOM.SG] be.PRES.3SG,it is good land
+inopia,shortage-FEM.NOM.SG wine-NEUT.GEN.SG,a wine shortage
+pueros vocantem vide-o,boy-ACC.PL call-PRES.PTCPL-ACC.SG see.PRES-1SG,I see the one that is calling the boys
+longum video·,tall-ACC.SG.MASC see.PRES-1SG,I see the tall one (masculine)
+ipse in Italiam magnis itineribus contendit duas que ibi legiones conscribit,self in Italy great marches speeds two and there legions enrolls,and he speeds to Italy with great marches and enrolls two legions there
+arcebat longe Latio multos que per annos errabant,defended far Latium many and for years wandered,"kept them far from Latium, and for many years they wandered"
 m` gO b´ b´ yàn,people all COP here,All people are here.
 n´ nE b´,chill COP,It is cold.
 wùlu yé gáfe mìnE à ñín ná,dog PFV booklet seize 3ps tooth Pp,The dog seized the booklet with its teeth.
 né y`ErE bánge.ra Sán,1ps self be_born.PFV San,I myself was born in San.
 wùlu má gáfe mìnE à ñín ná,dog PFVneg booklet seize 3ps tooth Pp,The dog did not seize the booklet with its teeth.
 Siisewo ye kiloo laa.,chicken INFL egg lay,The chicken laid an egg.
-Asi taa suu., he INFL go home,He is to go home.
+Asi taa suu.,he INFL go home,He is to go home.
 Den ye ji min.,child PAST water drink,The child drank water.
-"ne ye tyè m^èn ye, oè beè f^èn^è feère",[I COMPL mani RELi saw] DEM3i IMPF cloth(DEF) sell5,"the man that I saw (, he) sells the cloth"
-U boli­la,they walk­PAST,They walked
+"ne ye tyè mèn ye, oè beè fènè feère",I COMPL mani RELi saw DEM3i IMPF cloth(DEF) sell5,"the man that I saw (, he) sells the cloth"
+U boliSHYla,they walk PAST,They walked
 U ye a san,they PAST it buy,They bought it
 Nànga ní à mùsó` bìla-lá å¢g¡n ná,Nzanga and his wife.ART lean-PUNC RECP upon,Nzanga and his wife insulted eachother'.
 à yé ì sìgi,he PAST REFL sit.down,He sat (himself) down.
-màsake y r [yé ù fò],king INT welcomed.them,The king himself welcomed them.
+màsake y r yé ù fò,king INT welcomed.them,The king himself welcomed them.
 wùl? y?démis ? `ki,dog PERF child bite,The dog bit the child.
 sí õ-kàrè Sukwoo,you add me on we FUT FUT-go Sikasso at,"You and I, we will go to Sikasso."
 Mobili b`,Car COP here,The car is here.
-"n ye ty mìn ye, ò be fìnì fère",[I COMPL man REL see] D3 IMPERF cloth:DEF sell,The man who I saw was selling the cloth.
+"n ye ty mìn ye, ò be fìnì fère",I COMPL man REL see D3 IMPERF cloth:DEF sell,The man who I saw was selling the cloth.
 c¸ ye muru san n ye min ye,man past knife buy I past rel see,"the man bought the knife, the one that I saw"
 N son-na a ma.,I agreed it to,I agreed to it.
 A kaa-ra.,she went,She went.
 A kasi-ra.,he cried,He cried.
 Akana taa suu.,he INFL.NEG go home,He isn't to go home.
 Siisewo man kiloo laa.,chicken INFL.NEG egg lay,The chicken didn't lay an egg.
-ty ye [ne ye so m` ye] san,man pst I pst horse rel see] buy,The man bought the horse that I saw
+ty ye ne ye so m` ye san,man pst I pst horse rel see] buy,The man bought the horse that I saw
