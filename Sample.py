@@ -1,4 +1,3 @@
-
 from GlossingModel import GlossingPipeline
 import torch
 import torch.nn.functional as F

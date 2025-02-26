@@ -11,7 +11,7 @@ from GlossingModel import GlossingPipeline
 # 1. Custom Dataset for Glossing
 #########################################
 class GlossingDataset(Dataset):
-    def __init__(self, csv_file, max_src_len=50, max_tgt_len=50, max_trans_len=50):
+    def __init__(self, csv_file, max_src_len=20, max_tgt_len=20, max_trans_len=20):
         self.data = pd.read_csv(csv_file).dropna().reset_index(drop=True)
         self.max_src_len = max_src_len
         self.max_tgt_len = max_tgt_len
@@ -87,7 +87,7 @@ if __name__ == '__main__':
     pl.seed_everything(42, workers=True)
 
     # Create dataset and dataloader.
-    dataset = GlossingDataset("data/Dummy_Dataset.csv", max_src_len=50, max_tgt_len=50, max_trans_len=50)
+    dataset = GlossingDataset("data/Dummy_Dataset.csv", max_src_len=20, max_tgt_len=20, max_trans_len=20)
     dataloader = DataLoader(dataset, batch_size=50, shuffle=True, collate_fn=collate_fn,
                             num_workers=17, persistent_workers=True)
 
@@ -120,7 +120,7 @@ if __name__ == '__main__':
     )
 
     # Initialize trainer and train.
-    trainer = pl.Trainer(max_epochs=50, accelerator="auto", log_every_n_steps=1,
+    trainer = pl.Trainer(max_epochs=25, accelerator="auto", log_every_n_steps=1,
                          deterministic=True)
     trainer.fit(model, dataloader)
 
