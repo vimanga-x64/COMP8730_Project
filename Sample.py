@@ -9,10 +9,10 @@ def main():
     pl.seed_everything(42, workers=True)
 
     # Load the dataset.
-    dataset = GlossingDataset("data/Dummy_Dataset.csv", max_src_len=20, max_tgt_len=20, max_trans_len=20)
+    dataset = GlossingDataset("data/Dummy_Dataset.csv", max_src_len=100, max_tgt_len=50, max_trans_len=50)
 
-    # For a sample prediction, we'll take the first example.
-    src_tensor, src_len, gloss_tensor, trans_tensor = dataset[5]
+    # For a sample prediction, we'll take an example from the dataset
+    src_tensor, src_len, gloss_tensor, trans_tensor = dataset[20]
 
     # Convert source indices to one-hot vectors.
     char_vocab_size = len(dataset.src_vocab)
