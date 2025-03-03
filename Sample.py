@@ -1,51 +1,79 @@
-from GlossingModel import GlossingPipeline
 import torch
 import torch.nn.functional as F
-from main import GlossingDataset
-
-#########################################
-# 3. Inference Function
-#########################################
-def predict_gloss(model, dataset, source_text, translation_text, max_len=20):
-    # Convert input text to tensors
-    src_tensor = dataset.text_to_tensor(source_text, dataset.src_vocab,max_len, char_level=True).unsqueeze(0)  # (1, seq_len)
-    trans_tensor = dataset.text_to_tensor(translation_text, dataset.trans_vocab,max_len, char_level=False).unsqueeze(
-        0)  # (1, seq_len)
-
-    # Convert source tensor to one-hot encoding (required for encoder)
-    src_tensor = F.one_hot(src_tensor, num_classes=len(dataset.src_vocab)).float()
-
-    # Start with an empty output sequence
-    tgt_tensor = torch.zeros((1, 1), dtype=torch.long).to(model.device)  # (1, 1) placeholder
-
-    generated_tokens = []
-
-    for _ in range(max_len):  # Generate up to max_len tokens
-        gloss_logits, _, _, _ = model(src_tensor, torch.tensor([src_tensor.shape[1]]), tgt_tensor, trans_tensor)
-
-        # Getting the next token
-        next_token = torch.argmax(gloss_logits[:, -1, :], dim=-1).item()
-
-        if next_token == dataset.gloss_vocab["<pad>"]:  # Stop if padding token is predicted
-            break
-
-        generated_tokens.append(next_token)
-
-        # Append new token to tgt_tensor
-        tgt_tensor = torch.cat([tgt_tensor, torch.tensor([[next_token]], dtype=torch.long).to(model.device)], dim=1)
-
-    # Convert generated indices to gloss text
-    gloss_text = dataset.tensor_to_text(torch.tensor(generated_tokens), dataset.gloss_vocab)
-    return gloss_text[:20]
+import pytorch_lightning as pl
+from GlossingModel import GlossingPipeline
+from main import GlossingDataset, collate_fn  # Assuming your dataset and collate_fn are defined in main.py
 
 
-torch.manual_seed(42)
+def main():
+    pl.seed_everything(42, workers=True)
 
-dataset = GlossingDataset("data/Dummy_Dataset.csv")
+    # Load the dataset.
+    dataset = GlossingDataset("data/Dummy_Dataset.csv", max_src_len=20, max_tgt_len=20, max_trans_len=20)
 
-trained_model = GlossingPipeline.load_from_checkpoint("glossing_model.ckpt")
+    # For a sample prediction, we'll take the first example.
+    src_tensor, src_len, gloss_tensor, trans_tensor = dataset[5]
 
-# Test Run
-print("The predicted gloss for language 'inopi-a' with translation 'a wine shortage' is:")
-print(predict_gloss(trained_model, dataset, "inopi-a", "a wine shortage"))
-print("Expected output: shortage-FEM.NOM.SG ")
+    # Convert source indices to one-hot vectors.
+    char_vocab_size = len(dataset.src_vocab)
+    src_features = F.one_hot(src_tensor, num_classes=char_vocab_size).float().unsqueeze(
+        0)  # (1, src_seq_len, char_vocab_size)
+    src_len_tensor = torch.tensor([src_len], dtype=torch.long)  # (1,)
+
+    # Add batch dimension to target and translation.
+    tgt_tensor = gloss_tensor.unsqueeze(0)  # (1, tgt_seq_len)
+    trans_tensor = trans_tensor.unsqueeze(0)  # (1, trans_seq_len)
+
+    # Define hyperparameters matching your training configuration.
+    embed_dim = 256
+    num_heads = 8
+    ff_dim = 512
+    num_layers = 6
+    dropout = 0.1
+    use_gumbel = True
+    learning_rate = 0.001
+    gloss_pad_idx = dataset.gloss_vocab["<pad>"]
+
+    # Load the trained model checkpoint.
+    checkpoint_path = "glossing_model.ckpt"  # Ensure this checkpoint exists
+    model = GlossingPipeline.load_from_checkpoint(
+        checkpoint_path,
+        char_vocab_size=char_vocab_size,
+        gloss_vocab_size=len(dataset.gloss_vocab),
+        trans_vocab_size=len(dataset.trans_vocab),
+        embed_dim=embed_dim,
+        num_heads=num_heads,
+        ff_dim=ff_dim,
+        num_layers=num_layers,
+        dropout=dropout,
+        use_gumbel=use_gumbel,
+        learning_rate=learning_rate,
+        gloss_pad_idx=gloss_pad_idx
+    )
+    model.eval()
+
+    # Run prediction.
+    with torch.no_grad():
+        logits, morpheme_count, tau, seg_probs = model(src_features, src_len_tensor, tgt_tensor, trans_tensor,
+                                                       learn_segmentation=True)
+
+    # Get predicted gloss tokens (remove batch dimension).
+    predicted_indices = torch.argmax(logits, dim=-1).squeeze(0)
+
+    # Create an inverse gloss vocabulary for decoding.
+    inv_gloss_vocab = {idx: token for token, idx in dataset.gloss_vocab.items()}
+    predicted_gloss = " ".join([inv_gloss_vocab.get(idx.item(), "<unk>") for idx in predicted_indices])
+
+    # stop decoding when we see the stop token
+    stop_index = predicted_gloss.index('</s>')
+
+
+    # Print the sample input and predicted gloss.
+    print("Sample Input (Language):")
+    print(dataset.tensor_to_text(src_tensor, dataset.src_vocab))
+    print("\nPredicted Gloss:")
+    print(predicted_gloss[:stop_index + 4])
+
+
+if __name__ == "__main__":
+    main()
