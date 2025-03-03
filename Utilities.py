@@ -23,14 +23,10 @@ def make_mask_2d(lengths):
     return make_mask(max_len, lengths)
 
 def make_mask_3d(word_lengths, num_morphemes):
-    """
-    (Optional) Returns a 3D mask for structured predictions.
-    For now, this is a placeholder.
-    """
     batch_size = word_lengths.size(0)
     max_len = word_lengths.max().item()
-    max_morphemes = num_morphemes.max().item()
-    return torch.zeros(batch_size, max_len, max_morphemes, dtype=torch.bool, device=word_lengths.device)
+    # Use 1 instead of max_morphemes so that the mask shape is (batch_size, max_len, 1)
+    return torch.zeros(batch_size, max_len, 1, dtype=torch.bool, device=word_lengths.device)
 
 def max_pool_2d(x: torch.Tensor, lengths: torch.Tensor):
     # x: shape [batch x timesteps x features]
@@ -40,42 +36,49 @@ def max_pool_2d(x: torch.Tensor, lengths: torch.Tensor):
     return x
 
 
-#########################################
-# 4. Aggregation Function
-#########################################
-def aggregate_segments(encoder_outputs: torch.Tensor, segmentation_mask: torch.Tensor):
+def aggregate_segments(encoder_outputs: torch.Tensor, segmentation_mask: torch.Tensor) -> torch.Tensor:
     """
-    Aggregates encoder outputs into segment representations using segmentation boundaries.
+    Aggregates encoder outputs into morpheme-level representations using segmentation boundaries.
 
     Args:
-        encoder_outputs: Tensor (batch_size, seq_len, embed_dim)
-        segmentation_mask: Tensor (batch_size, seq_len) with 1 indicating a boundary.
+        encoder_outputs: Tensor of shape (batch_size, seq_len, embed_dim) containing encoder outputs.
+        segmentation_mask: Tensor of shape (batch_size, seq_len) with binary values (1 indicates a boundary).
+
     Returns:
-        seg_tensor: Tensor (batch_size, max_segments, embed_dim) with averaged segment representations.
+        seg_tensor: Tensor of shape (batch_size, max_segments, embed_dim) containing averaged morpheme representations.
     """
     batch_size, seq_len, embed_dim = encoder_outputs.size()
-    segments = []
+    segments = []  # List to store segments for each word in the batch
+    num_segments_list = []
+
     for b in range(batch_size):
-        outputs = encoder_outputs[b]  # (seq_len, embed_dim)
-        mask = segmentation_mask[b]  # (seq_len)
+        word_enc = encoder_outputs[b]  # (seq_len, embed_dim)
+        seg_mask = segmentation_mask[b]  # (seq_len,)
         seg_reps = []
         start = 0
         for i in range(seq_len):
-            if mask[i] >= 0.5:
-                if i - start + 1 > 0:
-                    seg_rep = outputs[start:i + 1].mean(dim=0)
+            # Check if current character is a boundary
+            if seg_mask[i] >= 0.5:
+                # Aggregate characters from start to i (inclusive)
+                if i >= start:  # Ensure non-empty segment
+                    seg_rep = word_enc[start:i + 1].mean(dim=0)
                     seg_reps.append(seg_rep)
                 start = i + 1
+        # If any characters remain after the last boundary, aggregate them
         if start < seq_len:
-            seg_rep = outputs[start:seq_len].mean(dim=0)
+            seg_rep = word_enc[start:seq_len].mean(dim=0)
             seg_reps.append(seg_rep)
-        if seg_reps:
-            segments.append(torch.stack(seg_reps, dim=0))
-        else:
-            segments.append(outputs.mean(dim=0, keepdim=True))
+        # If no boundaries were detected, fall back to a single segment (average of entire word)
+        if len(seg_reps) == 0:
+            seg_reps.append(word_enc.mean(dim=0))
+        seg_reps = torch.stack(seg_reps, dim=0)  # (num_segments, embed_dim)
+        segments.append(seg_reps)
+        num_segments_list.append(seg_reps.size(0))
 
-    max_segs = max(seg.shape[0] for seg in segments)
-    seg_tensor = torch.zeros(batch_size, max_segs, embed_dim, device=encoder_outputs.device)
-    for i, seg in enumerate(segments):
-        seg_tensor[i, :seg.shape[0], :] = seg
+    # Pad all segment tensors to the maximum number of segments in the batch.
+    max_segments = max(num_segments_list)
+    seg_tensor = torch.zeros(batch_size, max_segments, embed_dim, device=encoder_outputs.device)
+    for b in range(batch_size):
+        segs = segments[b]
+        seg_tensor[b, :segs.size(0), :] = segs
     return seg_tensor

@@ -1,4 +1,3 @@
-"""Training Script"""
 import pandas as pd
 import torch
 import torch.nn.functional as F
@@ -6,6 +5,7 @@ from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as pl
 from collections import Counter
 from GlossingModel import GlossingPipeline
+
 
 #########################################
 # 1. Custom Dataset for Glossing
@@ -62,7 +62,6 @@ class GlossingDataset(Dataset):
         # For gloss, add start and end tokens.
         gloss_tokens = ["<s>"] + gloss_text.split() + ["</s>"]
         gloss_indices = [self.gloss_vocab.get(tok, self.gloss_vocab["<unk>"]) for tok in gloss_tokens]
-        # Truncate and pad gloss to fixed length.
         gloss_indices = gloss_indices[:self.max_tgt_len]
         if len(gloss_indices) < self.max_tgt_len:
             gloss_indices += [self.gloss_vocab["<pad>"]] * (self.max_tgt_len - len(gloss_indices))
@@ -72,6 +71,7 @@ class GlossingDataset(Dataset):
         src_len = min(len(list(src_text)), self.max_src_len)
         return src_tensor, src_len, gloss_tensor, trans_tensor
 
+
 def collate_fn(batch):
     src_list, src_len_list, tgt_list, trans_list = zip(*batch)
     src = torch.stack(src_list, dim=0)
@@ -80,8 +80,9 @@ def collate_fn(batch):
     trans = torch.stack(trans_list, dim=0)
     return src, src_len, tgt, trans
 
+
 #########################################
-# 2. Main Training Script using PyTorch Lightning
+# 2. Main Training and Prediction Script
 #########################################
 if __name__ == '__main__':
     pl.seed_everything(42, workers=True)
@@ -89,7 +90,7 @@ if __name__ == '__main__':
     # Create dataset and dataloader.
     dataset = GlossingDataset("data/Dummy_Dataset.csv", max_src_len=20, max_tgt_len=20, max_trans_len=20)
     dataloader = DataLoader(dataset, batch_size=50, shuffle=True, collate_fn=collate_fn,
-                            num_workers=17, persistent_workers=True)
+                            num_workers=4, persistent_workers=True)
 
     # Hyperparameters.
     char_vocab_size = len(dataset.src_vocab)
@@ -119,12 +120,58 @@ if __name__ == '__main__':
         gloss_pad_idx
     )
 
-    # Initialize trainer and train.
-    trainer = pl.Trainer(max_epochs=25, accelerator="auto", log_every_n_steps=1,
-                         deterministic=True)
+    # Train the model using PyTorch Lightning Trainer.
+    trainer = pl.Trainer(max_epochs=25, accelerator="auto", log_every_n_steps=1, deterministic=True)
     trainer.fit(model, dataloader)
 
     # Save the trained model checkpoint.
     checkpoint_path = "glossing_model.ckpt"
     trainer.save_checkpoint(checkpoint_path)
     print(f"Model checkpoint saved to {checkpoint_path}")
+
+    # ----------------------------
+    # Load the trained model and run a prediction on a sample.
+    # ----------------------------
+
+    # Load the model from the checkpoint.
+    loaded_model = GlossingPipeline.load_from_checkpoint(
+        checkpoint_path,
+        char_vocab_size=char_vocab_size,
+        gloss_vocab_size=gloss_vocab_size,
+        trans_vocab_size=trans_vocab_size,
+        embed_dim=embed_dim,
+        num_heads=num_heads,
+        ff_dim=ff_dim,
+        num_layers=num_layers,
+        dropout=dropout,
+        use_gumbel=use_gumbel,
+        learning_rate=learning_rate,
+        gloss_pad_idx=gloss_pad_idx
+    )
+    loaded_model.eval()
+
+    # Get a sample from the dataset.
+    sample = dataset[0]
+    src_tensor, src_len, gloss_tensor, trans_tensor = sample
+    # Convert source indices to one-hot vectors.
+    src_features = F.one_hot(src_tensor, num_classes=char_vocab_size).float()
+    src_features = src_features.unsqueeze(0)  # add batch dimension
+    src_len_tensor = torch.tensor([src_len], dtype=torch.long)
+    tgt_tensor = gloss_tensor.unsqueeze(0)  # target gloss sequence
+    trans_tensor = trans_tensor.unsqueeze(0)  # translation sequence
+
+    # Run prediction.
+    with torch.no_grad():
+        logits, morpheme_count, tau, seg_probs = loaded_model(src_features, src_len_tensor, tgt_tensor, trans_tensor,
+                                                              learn_segmentation=True)
+    # Get predicted gloss tokens.
+    predicted_indices = torch.argmax(logits, dim=-1).squeeze(0)  # (tgt_seq_len,)
+
+    # Convert indices back to tokens.
+    inv_gloss_vocab = {i: tok for tok, i in dataset.gloss_vocab.items()}
+    predicted_gloss = " ".join([inv_gloss_vocab.get(idx.item(), "<unk>") for idx in predicted_indices])
+
+    print("Sample input (Language):")
+    print(dataset.tensor_to_text(src_tensor, dataset.src_vocab))
+    print("Predicted Gloss:")
+    print(predicted_gloss)
