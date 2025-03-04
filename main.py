@@ -103,6 +103,8 @@ if __name__ == '__main__':
     dropout = 0.1
     use_gumbel = True
     learning_rate = 0.001
+    use_relative = True
+    max_relative_position = 64
     gloss_pad_idx = dataset.gloss_vocab["<pad>"]
 
     # Instantiate the integrated model.
@@ -117,7 +119,9 @@ if __name__ == '__main__':
         dropout,
         use_gumbel,
         learning_rate,
-        gloss_pad_idx
+        gloss_pad_idx,
+        use_relative,
+        max_relative_position,
     )
 
     # Train the model using PyTorch Lightning Trainer.

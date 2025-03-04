@@ -32,6 +32,8 @@ def main():
     dropout = 0.1
     use_gumbel = True
     learning_rate = 0.001
+    use_relative = True
+    max_relative_position = 64
     gloss_pad_idx = dataset.gloss_vocab["<pad>"]
 
     # Load the trained model checkpoint.
@@ -48,7 +50,9 @@ def main():
         dropout=dropout,
         use_gumbel=use_gumbel,
         learning_rate=learning_rate,
-        gloss_pad_idx=gloss_pad_idx
+        gloss_pad_idx=gloss_pad_idx,
+        use_relative=use_relative,
+        max_relative_position=max_relative_position
     )
     model.eval()
 

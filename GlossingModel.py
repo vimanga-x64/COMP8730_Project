@@ -26,7 +26,8 @@ class GlossingPipeline(pl.LightningModule):
     def __init__(self, char_vocab_size: int, gloss_vocab_size: int, trans_vocab_size: int,
                  embed_dim: int = 256, num_heads: int = 8, ff_dim: int = 512,
                  num_layers: int = 6, dropout: float = 0.1, use_gumbel: bool = False,
-                 learning_rate: float = 0.001, gloss_pad_idx: int = None):
+                 learning_rate: float = 0.001, gloss_pad_idx: int = None,
+                 use_relative: bool = True, max_relative_position: int = 64):
         super(GlossingPipeline, self).__init__()
         self.save_hyperparameters(ignore=["gloss_pad_idx"])
         # Build model components.
@@ -36,7 +37,9 @@ class GlossingPipeline(pl.LightningModule):
             num_layers=num_layers,
             num_heads=num_heads,
             dropout=dropout,
-            projection_dim=None
+            projection_dim=None,
+            use_relative=use_relative,
+            max_relative_position=max_relative_position
         )
         # For Track 1 (unsupervised segmentation), gold segmentation is not available so pass None.
         self.segmentation = MorphemeSegmenter(embed_dim, use_gumbel=use_gumbel)
