@@ -64,23 +64,21 @@ Follow these steps:
    git clone https://github.com/gfkaceli/COMP8730_Project.git
    cd COMP8730_Project
 2. **Create Environment and Install Dependencies**
-   a.
-   Acitivate Virtual Envirnoment:
-   `python -m venv venv`
-   b.
-     For Windows:
+   - A. Create Virtual Environment
+      `python -m venv venv`
+   - B. Activate Virtual Environment
+     - For Windows:
     `venv\Scripts\activate`
-     On Linux/MacOS:
+     - On Linux/MacOS:
     `source venv/bin/activate`
-   c.
-   To Install Dependencies Do:
-   `pip install -r requirements.txt`
+   - C. To Install Dependencies Do:
+      `pip install -r requirements.txt`
    
-3. **Run the Training Script**
+4. **Run the Training Script**
     ```bash
    python main.py
 
-4. **Run the Inference Script**
+5. **Run the Inference Script**
     ```bash
    python Sample.py
 
