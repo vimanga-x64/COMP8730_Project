@@ -60,8 +60,8 @@ Follow these steps:
 **PYTHON VIEW**
 1. **Clone the Repository:**
    ```bash
-   git clone <repository-url>
-   cd <repository-directory>
+   git clone https://github.com/gfkaceli/COMP8730_Project.git
+   cd COMP8730_Project
 2. **Create Environment and Install Dependencies**
    ```bash
    python -m venv venv
@@ -79,8 +79,8 @@ Follow these steps:
 
 1. **Clone the Repository:**
    ```bash
-   git clone <repository-url>
-   cd <repository-directory>
+   git clone https://github.com/gfkaceli/COMP8730_Project.git
+   cd COMP8730_Project
    
 2. **Create Environment and Install Dependencies**
    ```bash
