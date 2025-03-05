@@ -48,7 +48,8 @@ This project implements an enhanced pipeline for automated interlinear glossing.
 ## Installation
 
 This project is best run using conda 
-however you can use python as well since it is simpler to set up .
+however if you do not have conda already installed and configured
+we recommend you use python to run the start up scripts immediately and get the preliminary results.
 
 We recommend the use of conda due to GPU access,
 for these purposes to just run the sample train and evaluate scripts a 
