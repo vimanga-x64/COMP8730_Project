@@ -84,7 +84,7 @@ Follow these steps:
    
 2. **Create Environment and Install Dependencies**
    ```bash
-   conda create -n glossing_env python=3.12.7 pip
+   conda create -n glossing_env python=3.12.7 pip # python version 3.11.0 to 3.12.7 should work so feel free to change
    conda activate glossing_env
    pip install -r requirements.txt
 
