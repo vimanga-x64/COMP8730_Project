@@ -64,15 +64,19 @@ Follow these steps:
    git clone https://github.com/gfkaceli/COMP8730_Project.git
    cd COMP8730_Project
 2. **Create Environment and Install Dependencies**
-   - A. Create Virtual Environment
-      `python -m venv venv`
-   - B. Activate Virtual Environment
+   - A. Create Virtual Environment:
+      ```bash
+      python -m venv venv
+   - B. Activate Virtual Environment:
      - For Windows:
-    `venv\Scripts\activate`
-     - On Linux/MacOS:
-    `source venv/bin/activate`
+        ```bash
+        venv\Scripts\activate
+     - For Linux/MacOS:
+       ```bash
+        source venv/bin/activate
    - C. To Install Dependencies Do:
-      `pip install -r requirements.txt`
+       ```bash
+        pip install -r requirements.txt
    
 4. **Run the Training Script**
     ```bash
