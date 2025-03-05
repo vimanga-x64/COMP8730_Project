@@ -56,6 +56,7 @@ for these purposes to just run the sample train and evaluate scripts a
 CPU will suffice.
 Follow these steps:
 
+- Use Python versions between 3.11.0 to 3.12.7
 
 **PYTHON VIEW**
 1. **Clone the Repository:**
@@ -76,6 +77,8 @@ Follow these steps:
    python Sample.py
 
 **CONDA VIEW**
+
+- Conda version utilized is 24.11.3
 
 1. **Clone the Repository:**
    ```bash
