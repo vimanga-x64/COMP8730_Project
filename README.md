@@ -47,15 +47,34 @@ This project implements an enhanced pipeline for automated interlinear glossing.
 
 ## Installation
 
-This project is best run using conda.
-- **Python 3.12.7**
-- **Conda 24.9.2**
+This project is best run using conda 
+however you can use python as well since it is simpler to set up .
 
-If you do not have conda replace conda with python in these steps.
-However, we recommend the use of conda due to GPU access,
+We recommend the use of conda due to GPU access,
 for these purposes to just run the sample train and evaluate scripts a 
 CPU will suffice.
 Follow these steps:
+
+
+**PYTHON VIEW**
+1. **Clone the Repository:**
+   ```bash
+   git clone <repository-url>
+   cd <repository-directory>
+2. **Create Environment and Install Dependencies**
+   ```bash
+   python -m venv venv
+   venv\Scripts\activate  # On Linux/MacOS: source venv/bin/activate 
+   pip install -r requirements.txt
+3. **Run the Training Script**
+    ```bash
+   python main.py
+
+4. **Run the Inference Script**
+    ```bash
+   python Sample.py
+
+**CONDA VIEW**
 
 1. **Clone the Repository:**
    ```bash
@@ -64,7 +83,7 @@ Follow these steps:
    
 2. **Create Environment and Install Dependencies**
    ```bash
-   conda create -n glossing_env python=3.12.7
+   conda create -n glossing_env python=3.12.7 pip
    conda activate glossing_env
    pip install -r requirements.txt
 
