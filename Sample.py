@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 import pytorch_lightning as pl
 from GlossingModel import GlossingPipeline
-from main import GlossingDataset, collate_fn  # Assuming your dataset and collate_fn are defined in main.py
+from main import GlossingDataset, collate_fn
 
 
 def main():
