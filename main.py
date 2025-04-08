@@ -1,134 +1,158 @@
-import pandas as pd
-import torch
-import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as pl
-from collections import Counter
 from GlossingModel import GlossingPipeline
+from data import GlossingDataModule
+from metrics import compute_word_level_gloss_accuracy, compute_morpheme_level_gloss_accuracy
+import argparse
 
+language_code_mapping = {
+    "Arapaho": "arp",
+    "Gitksan": "git",
+    "Lezgi": "lez",
+    "Natugu": "ntu",
+    "Nyangbo": "nyb",
+    "Tsez": "ddo",
+    "Uspanteko": "usp",
+}
 
-#########################################
-# 1. Custom Dataset for Glossing
-#########################################
-class GlossingDataset(Dataset):
-    def __init__(self, csv_file, max_src_len=100, max_tgt_len=30, max_trans_len=50):
-        self.data = pd.read_csv(csv_file).dropna().reset_index(drop=True)
-        self.max_src_len = max_src_len
-        self.max_tgt_len = max_tgt_len
-        self.max_trans_len = max_trans_len
-
-        # Build vocabularies dynamically.
-        self.src_vocab = self.build_vocab(self.data["Language"], char_level=True)
-        self.gloss_vocab = self.build_vocab(self.data["Gloss"], char_level=False)
-        self.trans_vocab = self.build_vocab(self.data["Translation"], char_level=False)
-
-        # Ensure special tokens exist for gloss.
-        for token in ["<s>", "</s>", "<pad>", "<unk>"]:
-            if token not in self.gloss_vocab:
-                self.gloss_vocab[token] = len(self.gloss_vocab)
-
-    def build_vocab(self, data, char_level=False):
-        counter = Counter()
-        for item in data.dropna():
-            tokens = list(item) if char_level else item.split()
-            counter.update(tokens)
-        # Reserve 0 for <pad> and 1 for <unk>.
-        vocab = {tok: i for i, tok in enumerate(counter.keys(), start=2)}
-        vocab["<pad>"] = 0
-        vocab["<unk>"] = 1
-        return vocab
-
-    def text_to_tensor(self, text, vocab, max_len, char_level=False):
-        tokens = list(text) if char_level else text.split()
-        indices = [vocab.get(tok, vocab["<unk>"]) for tok in tokens][:max_len]
-        indices += [vocab["<pad>"]] * (max_len - len(indices))
-        return torch.tensor(indices, dtype=torch.long)
-
-    def tensor_to_text(self, tensor, vocab):
-        inv_vocab = {idx: tok for tok, idx in vocab.items()}
-        tokens = [inv_vocab.get(idx.item(), "<unk>") for idx in tensor if idx.item() != self.gloss_vocab["<pad>"]]
-        return " ".join(tokens)
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, idx):
-        row = self.data.iloc[idx]
-        src_text = str(row["Language"])
-        gloss_text = str(row["Gloss"])
-        trans_text = str(row["Translation"])
-
-        src_tensor = self.text_to_tensor(src_text, self.src_vocab, self.max_src_len, char_level=True)
-        # For gloss, add start and end tokens.
-        gloss_tokens = ["<s>"] + gloss_text.split() + ["</s>"]
-        gloss_indices = [self.gloss_vocab.get(tok, self.gloss_vocab["<unk>"]) for tok in gloss_tokens]
-        gloss_indices = gloss_indices[:self.max_tgt_len]
-        if len(gloss_indices) < self.max_tgt_len:
-            gloss_indices += [self.gloss_vocab["<pad>"]] * (self.max_tgt_len - len(gloss_indices))
-        gloss_tensor = torch.tensor(gloss_indices, dtype=torch.long)
-        trans_tensor = self.text_to_tensor(trans_text, self.trans_vocab, self.max_trans_len, char_level=False)
-
-        src_len = min(len(list(src_text)), self.max_src_len)
-        return src_tensor, src_len, gloss_tensor, trans_tensor
-
-
-def collate_fn(batch):
-    src_list, src_len_list, tgt_list, trans_list = zip(*batch)
-    src = torch.stack(src_list, dim=0)
-    src_len = torch.tensor(src_len_list, dtype=torch.long)
-    tgt = torch.stack(tgt_list, dim=0)
-    trans = torch.stack(trans_list, dim=0)
-    return src, src_len, tgt, trans
-
-
-#########################################
-# 2. Main Training and Prediction Script
-#########################################
-if __name__ == '__main__':
-    pl.seed_everything(42, workers=True)
-
-    # Create dataset and dataloader.
-    dataset = GlossingDataset("data/Dummy_Dataset.csv", max_src_len=100, max_tgt_len=50, max_trans_len=50)
-    dataloader = DataLoader(dataset, batch_size=50, shuffle=True, collate_fn=collate_fn,
-                            num_workers=4, persistent_workers=True)
-
-    # Hyperparameters.
-    char_vocab_size = len(dataset.src_vocab)
-    gloss_vocab_size = len(dataset.gloss_vocab)
-    trans_vocab_size = len(dataset.trans_vocab)
-    embed_dim = 256
-    num_heads = 8
-    ff_dim = 512
-    num_layers = 6
-    dropout = 0.1
-    use_gumbel = True
-    learning_rate = 0.001
-    use_relative = True
-    max_relative_position = 64
-    gloss_pad_idx = dataset.gloss_vocab["<pad>"]
-
-    # Instantiate the integrated model.
-    model = GlossingPipeline(
-        char_vocab_size,
-        gloss_vocab_size,
-        trans_vocab_size,
-        embed_dim,
-        num_heads,
-        ff_dim,
-        num_layers,
-        dropout,
-        use_gumbel,
-        learning_rate,
-        gloss_pad_idx,
-        use_relative,
-        max_relative_position,
+def make_argument_parser():
+    parser = argparse.ArgumentParser(description="Glossing Model Arguments")
+    parser.add_argument(
+        "--language",
+        type=str,
+        required=True,
+        choices=list(language_code_mapping.keys()),
     )
 
-    # Train the model using PyTorch Lightning Trainer.
-    trainer = pl.Trainer(max_epochs=35, accelerator="auto", log_every_n_steps=1, deterministic=True)
-    trainer.fit(model, dataloader)
+    parser.add_argument("--batch",
+                        type=int, default=128, required=False, help="Batch size.")
+    parser.add_argument("--layers",
+                        type=int, default=2, required=False, help="Number of Layers")
+    parser.add_argument("--dropout",
+                        type=float, default=0.1, required=False, help="Dropout for each Layer")
+    parser.add_argument("--lr",
+                        type=float, default=0.001, required=False, help="The learning rate")
+    parser.add_argument("--embdim",
+                        type=int, default=128, required=False, help="Embedding Dimensions")
+    parser.add_argument("--ffdim",
+                        type=int, default=512, required=False, help="FeedForward Dimension")
+    parser.add_argument("--numheads",
+                        type=int, default=16, required=False, help="Number of heads")
+    parser.add_argument("--epochs",
+                        type=int, default=25, required=False, help="Number of Epochs")
+
+    return parser.parse_args()
+
+
+if __name__ == '__main__':
+    pl.seed_everything(42, workers=True)
+    args = make_argument_parser()
+
+    language = args.language
+    language_code = language_code_mapping[language] # language is the key in the map
+
+
+    # Define file paths for training, validation, and test data.
+    train_file = f"data/{language}/{language_code}-train-track1-uncovered"
+    val_file = f"data/{language}/{language_code}-dev-track1-uncovered"
+    test_file = f"data/{language}/{language_code}-test-track1-uncovered"
+
+    # Create the DataModule instance.
+    dm = GlossingDataModule(train_file=train_file, val_file=val_file, test_file=test_file,
+                            batch_size=args.batch)
+    dm.setup(stage="fit")
+    dm.setup(stage="test")
+
+    # Retrieve vocabulary sizes from the DataModule.
+    char_vocab_size = dm.source_alphabet_size   # Source vocabulary size (for characters)
+    gloss_vocab_size = dm.target_alphabet_size    # Gloss vocabulary size (for gloss tokens)
+    trans_vocab_size = dm.trans_alphabet_size      # Translation vocabulary size
+
+    # Define hyperparameters.
+    embed_dim = args.embdim
+    num_heads = args.numheads
+    ff_dim = args.ffdim
+    num_layers = args.layers
+    dropout = args.dropout
+    use_gumbel = True
+    learning_rate = args.lr
+    use_relative = True
+    max_relative_position = 64
+    # the gloss tokenizer uses "<pad>" as the padding token.
+    gloss_pad_idx = dm.target_tokenizer.get_stoi()["<pad>"]
+
+    # Instantiate the integrated glossing model.
+    model = GlossingPipeline(
+        char_vocab_size=char_vocab_size,
+        gloss_vocab_size=gloss_vocab_size,
+        trans_vocab_size=trans_vocab_size,
+        embed_dim=embed_dim,
+        num_heads=num_heads,
+        ff_dim=ff_dim,
+        num_layers=num_layers,
+        dropout=dropout,
+        use_gumbel=use_gumbel,
+        learning_rate=learning_rate,
+        gloss_pad_idx=gloss_pad_idx,
+        use_relative=use_relative,
+        max_relative_position=max_relative_position,
+    )
+
+    # Configure the PyTorch Lightning Trainer.
+    trainer = pl.Trainer(
+        max_epochs=args.epochs,
+        accelerator="auto",
+        log_every_n_steps=5,
+        deterministic=True
+    )
+
+    # Train the model.
+    trainer.fit(model, dm)
 
     # Save the trained model checkpoint.
-    checkpoint_path = "glossing_model.ckpt"
+    checkpoint_path = f"models/glossing_model_{language_code}.ckpt"
     trainer.save_checkpoint(checkpoint_path)
     print(f"Model checkpoint saved to {checkpoint_path}")
+
+  # Get predictions and true glosses.
+    print("Loading the model from the checkpoint...")
+    model = GlossingPipeline.load_from_checkpoint(checkpoint_path)
+    predictions = trainer.predict(model, dataloaders=dm.test_dataloader())
+
+    # Create an inverse mapping for the gloss vocabulary.
+    inv_gloss_vocab = {idx: token for token, idx in dm.target_tokenizer.get_stoi().items()}
+
+    # Extract true glosses from the test dataset.
+    true_glosses = []
+    for batch in dm.test_dataloader():
+        _, _, tgt_batch, _ = batch
+        for tgt in tgt_batch:
+            gloss_tokens = [inv_gloss_vocab.get(idx.item(), "<unk>") for idx in tgt if idx.item() != gloss_pad_idx]
+            if "</s>" in gloss_tokens:
+                gloss_tokens = gloss_tokens[:gloss_tokens.index("</s>")]
+            true_gloss = " ".join(gloss_tokens)
+            true_glosses.append(true_gloss)
+
+    # Process and print predictions alongside true glosses.
+    predicted_glosses = []
+    sample_index = 0  # Global sample index across all batches
+    print("\nPredictions and True Glosses:")
+    for batch in predictions:
+        for pred in batch:
+            tokens = [inv_gloss_vocab.get(idx.item(), "<unk>") for idx in pred if idx.item() != gloss_pad_idx]
+            if "</s>" in tokens:
+                tokens = tokens[:tokens.index("</s>")]
+            predicted_gloss = " ".join(tokens)
+            predicted_glosses.append(predicted_gloss)
+            # Print predicted gloss and true gloss side by side.
+            print(f"Sample {sample_index + 1}:")
+            print(f"  Predicted Gloss: {predicted_gloss}")
+            print(f"  True Gloss:     {true_glosses[sample_index]}")
+            print()  # Add a blank line for readability.
+            sample_index += 1  # Increment the global sample index
+
+    # Calculate and print word-level and morpheme-level gloss accuracy.
+    word_level_accuracy = compute_word_level_gloss_accuracy(predicted_glosses, true_glosses)
+    morpheme_level_accuracy = compute_morpheme_level_gloss_accuracy(predicted_glosses, true_glosses)
+
+    print("word level accuracy:", word_level_accuracy)
+    print("morpheme level accuracy:", morpheme_level_accuracy)
