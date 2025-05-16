@@ -29,7 +29,30 @@ This project implements an enhanced pipeline for automated interlinear glossing.
   Integrates the above modules into a full end-to-end system (implemented as a PyTorch Lightning module). The pipeline takes one-hot encoded source features, source lengths, target gloss tokens, and translation tokens; it processes these through the encoder, segmentation module, and decoder to generate gloss predictions.  
   **Output:** The decoder produces logits over the gloss vocabulary, along with auxiliary segmentation outputs (morpheme count, adaptive threshold, and segmentation probabilities).
 
-- **main.py**  
+- **main.py**
+  Contains the training script which:
+  - Loads the glossing data (via `data.py`),
+  - Builds the necessary vocabularies,
+  - Creates DataLoader objects,
+  - Trains the integrated glossing model using PyTorch Lightning, and
+  - Saves the model checkpoint.
+  - Runs inference and returns metrics
+
+command-line arguments (batch size, epochs, language, etc.) can be parsed using `argparse` to configure training dynamically. 
+Additionally, the script prints out the predictions alongside the true gloss for evaluation.
+
+- **data.py**
+  - Loads the datasets by using the DataLoader Object
+  **Input:** Takes a data file
+  **Output:** Outputs a DataLoader object for train, validation and test sets
+
+- **metrics.py**
+  Contains helper functions for our metric calculations:
+  - **Word Level Gloss Accuracy**
+  - **Morpheme Level Gloss Accuracy**
+
+
+- **old_main.py**  
   Contains the training script that:
   - Loads the dataset (from `Dummy_Dataset.csv`),
   - Builds vocabularies for source characters, gloss tokens, and translation tokens,
@@ -47,13 +70,6 @@ This project implements an enhanced pipeline for automated interlinear glossing.
 
 ## Installation
 
-This project is best run using conda 
-however if you do not have conda already installed and configured
-we recommend you use python to run the start up scripts immediately and get the preliminary results.
-
-We recommend the use of conda due to GPU access,
-for these purposes to just run the sample train and evaluate scripts a 
-CPU will suffice.
 Follow these steps:
 
 - Use Python versions between 3.11.0 to 3.12.7
@@ -78,13 +94,17 @@ Follow these steps:
        ```bash
         pip install -r requirements.txt
    
-4. **Run the Training Script**
+3. **Make Models Directory (if you do not have it already)**
     ```bash
-   python main.py
+   mkdir models
 
-5. **Run the Inference Script**
+4. **Run the Training and Inference Scripts**
     ```bash
-   python Sample.py
+   python main.py --language Gitksan --batch 7 --epochs 20
+   python main.py --language Lezgi --batch 128 --numheads 32 --epochs 30
+   python main.py --language Natugu --dropout 0.1354 --batch 128 --numheads 64 --epochs 20
+   python main.py --language Tsez --batch 128 --epochs 25
+
 
 **CONDA VIEW**
 
@@ -101,13 +121,17 @@ Follow these steps:
    conda activate glossing_env
    pip install -r requirements.txt
 
-3. **Run the Training Script**
+3. **Make Models Directory (if you do not have it already)**
     ```bash
-   python main.py
+       mkdir models
 
-4. **Run the Inference Script**
+4. **Run the Training and Inference Script**
     ```bash
-   python Sample.py
+   python main.py --language Gitksan --batch 7 --epochs 20
+   python main.py --language Lezgi --batch 128 --numheads 32 --epochs 30
+   python main.py --language Natugu --dropout 0.1354 --batch 128 --numheads 64 --epochs 20
+   python main.py --language Tsez --batch 128 --epochs 25
+
    
 ## Notes
 
@@ -115,11 +139,20 @@ Follow these steps:
   will be created. In this directory you will see
   the training metrics, parameters and checkpoints
   for the model, also the final model checkpoint
-  will be saved as `glossing_model.ckpt`
-- `glossing_model.ckpt` will be loaded into Sample.py
-   to run inference, make sure the model parameters during
-   training and inference line up, otherwise the model will
-   not process the input.
-   
+  will be saved as `models/glossing_model_{lang}.ckpt`
+- Training and Prediction is done in main.py feel free to 
+  tune or adjust the hyperparameters to your liking
+- the possible hyperparameters to tune are as follows:
+  - **--batch:**  the size of the batch
+  - **--layers:** the number of layers
+  - **--dropout:** the dropout rate per layer
+  - **--lr:** the learning rate
+  - **--embdim:** the embedding dimensions
+  - **--ffdim:** the feed forward dimensions
+  - **--numheads:** the number of attention heads
+  - **--epochs:** the number of epochs
 
-# 
+  
+## Contact
+
+Any questions or concerns reach out to **kaceli@uwindsor.ca** or **umange@uwindsor.ca**
